@@ -20,6 +20,7 @@ export default function App() {
   const [parsedRoute, setParsedRoute] = useState(null);
   const [shareState, setShareState] = useState(null); // raw params for share button
   const [copyFeedback, setCopyFeedback] = useState(false);
+  const [mapsCopyFeedback, setMapsCopyFeedback] = useState(false);
 
   // On mount: check if there's a shared route in the URL and auto-calculate
   useEffect(() => {
@@ -178,6 +179,14 @@ export default function App() {
     }
   }, [shareState]);
 
+  const handleCopyMapsUrl = useCallback(() => {
+    if (!shareState?.url) return;
+    navigator.clipboard.writeText(shareState.url).then(() => {
+      setMapsCopyFeedback(true);
+      setTimeout(() => setMapsCopyFeedback(false), 2500);
+    });
+  }, [shareState]);
+
   const handleReset = () => {
     clearShareUrl();
     setStep('form');
@@ -270,10 +279,16 @@ export default function App() {
       </main>
 
       {step === 'result' && shareState && (
-        <button className="btn-share-fab" onClick={handleShare}>
-          {copyFeedback ? '✅' : '🔗'}
-          <span>{copyFeedback ? 'Copiado' : 'Compartir'}</span>
-        </button>
+        <div className="fab-group">
+          <button className="btn-share-fab btn-maps-fab" onClick={handleCopyMapsUrl} title="Copiar enlace de Google Maps">
+            {mapsCopyFeedback ? '✅' : '🗺️'}
+            <span>{mapsCopyFeedback ? 'Copiado' : 'Maps'}</span>
+          </button>
+          <button className="btn-share-fab" onClick={handleShare}>
+            {copyFeedback ? '✅' : '🔗'}
+            <span>{copyFeedback ? 'Copiado' : 'Compartir'}</span>
+          </button>
+        </div>
       )}
     </div>
   );

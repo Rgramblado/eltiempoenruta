@@ -974,3 +974,31 @@ html, body {
 .btn-share-fab:active {
   transform: scale(0.96);
 }
+
+/* ===== FAB GROUP ===== */
+.fab-group {
+  position: fixed;
+  bottom: 28px;
+  right: 20px;
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+/* Override position on individual FABs when inside group */
+.fab-group .btn-share-fab {
+  position: static;
+}
+
+.btn-maps-fab {
+  background: rgba(52, 168, 83, 0.15) !important;
+  border: 1px solid rgba(52, 168, 83, 0.4) !important;
+  color: #34a853 !important;
+  box-shadow: 0 4px 20px rgba(52,168,83,0.35) !important;
+}
+.btn-maps-fab:hover {
+  background: rgba(52, 168, 83, 0.25) !important;
+  box-shadow: 0 6px 28px rgba(52,168,83,0.5) !important;
+}
