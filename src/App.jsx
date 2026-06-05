@@ -199,11 +199,6 @@ export default function App() {
             </div>
           </div>
           <div className="header-actions">
-            {step === 'result' && shareState && (
-              <button className="btn-share" onClick={handleShare}>
-                {copyFeedback ? '✅ Copiado' : '🔗 Compartir'}
-              </button>
-            )}
             {(step === 'result' || step === 'stops') && (
               <button className="btn-reset" onClick={handleReset}>← Nueva ruta</button>
             )}
@@ -264,6 +259,12 @@ export default function App() {
                 <span className="stat-label">Alerta máxima</span>
               </div>
             </div>
+
+            {shareState && (
+              <button className="btn-share-full" onClick={handleShare}>
+                {copyFeedback ? '✅ ¡Enlace copiado!' : '🔗 Compartir esta ruta'}
+              </button>
+            )}
 
             <div className="map-container">
               <RouteMap routeData={routeData} />

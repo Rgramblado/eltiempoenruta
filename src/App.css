@@ -922,3 +922,24 @@ html, body {
   background: rgba(74,158,255,0.22);
   border-color: var(--blue);
 }
+
+.btn-share-full {
+  width: 100%;
+  padding: 14px;
+  background: rgba(74,158,255,0.1);
+  border: 1px solid rgba(74,158,255,0.35);
+  border-radius: var(--radius);
+  color: var(--blue);
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-share-full:hover {
+  background: rgba(74,158,255,0.2);
+  border-color: var(--blue);
+  transform: translateY(-1px);
+}
