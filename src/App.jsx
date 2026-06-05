@@ -1,24 +1,75 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import RouteForm from './components/RouteForm';
 import StopsStep from './components/StopsStep';
 import RouteMap from './components/RouteMap';
 import WeatherTimeline from './components/WeatherTimeline';
 import { parseGoogleMapsUrl, resolveWaypoints, getRouteFromOSRM, sampleRoutePoints, isShortUrl, expandShortUrl } from './utils/routeParser';
 import { fetchWeatherForPoints, tempToColor, getAlertLevel } from './utils/weather';
+import { encodeShareUrl, decodeShareUrl, clearShareUrl } from './utils/shareUrl';
 import './App.css';
 
 const ALERT_LABELS = ['OK', 'Precaución', 'Aviso', 'Peligro'];
 const ALERT_COLORS = ['#4caf88', '#f5c842', '#f5843a', '#e03a3a'];
 
 export default function App() {
-  const [step, setStep] = useState('form'); // form | loading | stops | result | error
+  const [step, setStep] = useState('form');
   const [loadingMsg, setLoadingMsg] = useState('');
   const [error, setError] = useState('');
   const [routeData, setRouteData] = useState(null);
   const [formData, setFormData] = useState(null);
-  const [parsedRoute, setParsedRoute] = useState(null); // holds waypoints + geometry between steps
+  const [parsedRoute, setParsedRoute] = useState(null);
+  const [shareState, setShareState] = useState(null); // raw params for share button
+  const [copyFeedback, setCopyFeedback] = useState(false);
 
-  // STEP 1: parse the route (fast), then go to stops screen
+  // On mount: check if there's a shared route in the URL and auto-calculate
+  useEffect(() => {
+    const shared = decodeShareUrl();
+    if (shared) {
+      const data = { url: shared.mapsUrl, departureTime: shared.departureTime, speedMultiplier: shared.speedMultiplier };
+      setFormData(data);
+      handleParseAndCalculate(data, shared.stops);
+    }
+  }, []);
+
+  // Combined parse + calculate (used for shared URLs, skips the stops step)
+  const handleParseAndCalculate = useCallback(async (data, stops = []) => {
+    setStep('loading');
+    setError('');
+
+    try {
+      setLoadingMsg('Analizando URL de Google Maps…');
+      let routeUrl = data.url;
+      if (isShortUrl(routeUrl)) {
+        setLoadingMsg('Expandiendo enlace corto…');
+        routeUrl = await expandShortUrl(routeUrl);
+      }
+      const parsed = parseGoogleMapsUrl(routeUrl);
+      if (parsed.length < 2) throw new Error('Se necesitan al menos origen y destino.');
+
+      setLoadingMsg('Geocodificando puntos de la ruta…');
+      const waypoints = await resolveWaypoints(parsed);
+
+      setLoadingMsg('Calculando ruta con OSRM…');
+      const { geometry, distanceM, durationS, legDistances, legDurations } = await getRouteFromOSRM(waypoints);
+
+      let cumWp = 0;
+      const waypointDists = [0];
+      legDistances.forEach(d => { cumWp += d; waypointDists.push(cumWp); });
+      const waypointsWithDist = waypoints.map((w, i) => ({ ...w, distFromStart: waypointDists[i] || 0 }));
+
+      const pr = { waypoints: waypointsWithDist, geometry, distanceM, durationS, legDistances, legDurations, departureTime: data.departureTime, speedMultiplier: data.speedMultiplier || 1.0 };
+      setParsedRoute(pr);
+
+      await runCalculation(pr, stops, data);
+
+    } catch (e) {
+      console.error(e);
+      setError(e.message || 'Error desconocido.');
+      setStep('error');
+    }
+  }, []);
+
+  // STEP 1: parse route, go to stops screen
   const handleParseRoute = useCallback(async (data) => {
     setFormData(data);
     setStep('loading');
@@ -40,40 +91,39 @@ export default function App() {
       setLoadingMsg('Calculando ruta con OSRM…');
       const { geometry, distanceM, durationS, legDistances, legDurations } = await getRouteFromOSRM(waypoints);
 
-      // Compute distance from start for each waypoint (for the stops UI)
       let cumWp = 0;
       const waypointDists = [0];
       legDistances.forEach(d => { cumWp += d; waypointDists.push(cumWp); });
       const waypointsWithDist = waypoints.map((w, i) => ({ ...w, distFromStart: waypointDists[i] || 0 }));
 
-      setParsedRoute({
-        waypoints: waypointsWithDist,
-        geometry, distanceM, durationS, legDistances, legDurations,
-        departureTime: data.departureTime,
-        speedMultiplier: data.speedMultiplier || 1.0,
-      });
+      setParsedRoute({ waypoints: waypointsWithDist, geometry, distanceM, durationS, legDistances, legDurations, departureTime: data.departureTime, speedMultiplier: data.speedMultiplier || 1.0 });
       setStep('stops');
 
     } catch (e) {
       console.error(e);
-      setError(e.message || 'Error desconocido. Revisa los datos e inténtalo de nuevo.');
+      setError(e.message || 'Error desconocido.');
       setStep('error');
     }
   }, []);
 
-  // STEP 2: with stops chosen, run weather + ETA calculation
+  // STEP 2: calculate weather with chosen stops
   const handleCalculate = useCallback(async (stops) => {
     setStep('loading');
     setError('');
+    // Save stops into shareState alongside the form data
+    setShareState({ ...formData, stops });
+    await runCalculation(parsedRoute, stops, formData);
+  }, [parsedRoute, formData]);
 
+  // Core calculation (reused by both paths)
+  async function runCalculation(pr, stops, data) {
     try {
-      const { waypoints, geometry, distanceM, durationS, legDistances, legDurations, departureTime, speedMultiplier } = parsedRoute;
+      const { waypoints, geometry, distanceM, durationS, legDistances, legDurations, departureTime, speedMultiplier } = pr;
       const multiplier = speedMultiplier || 1.0;
       const departureMs = new Date(departureTime).getTime();
 
       setLoadingMsg('Muestreando puntos de la ruta…');
       const samples = sampleRoutePoints(geometry, distanceM, 15);
-
       const cumTimeS = buildCumulativeTime(geometry, legDistances, legDurations);
       const cumDistM = buildCumulativeDist(geometry);
       const stopsByDist = buildStopsByDistance(waypoints, legDistances, stops);
@@ -104,18 +154,8 @@ export default function App() {
 
       const effectiveAvgKmh = Math.round((distanceM / 1000) / ((durationS / multiplier) / 3600));
 
-      setRouteData({
-        waypoints,
-        geometry,
-        samples: enriched,
-        distanceKm: distanceM / 1000,
-        osrmDurationS: durationS,
-        stops,
-        stopsByDist,
-        speedMultiplier: multiplier,
-        effectiveAvgKmh,
-        departureTime,
-      });
+      setShareState({ url: data.url, departureTime, speedMultiplier: multiplier, stops });
+      setRouteData({ waypoints, geometry, samples: enriched, distanceKm: distanceM / 1000, osrmDurationS: durationS, stops, stopsByDist, speedMultiplier: multiplier, effectiveAvgKmh, departureTime });
       setStep('result');
 
     } catch (e) {
@@ -123,7 +163,29 @@ export default function App() {
       setError(e.message || 'Error desconocido al calcular la previsión.');
       setStep('error');
     }
-  }, [parsedRoute]);
+  }
+
+  const handleShare = useCallback(() => {
+    if (!shareState) return;
+    const url = encodeShareUrl(shareState.url, shareState.departureTime, shareState.speedMultiplier, shareState.stops || []);
+    if (navigator.share) {
+      navigator.share({ title: 'El Tiempo en Ruta', text: '🏍️ Mira el tiempo en esta ruta', url });
+    } else {
+      navigator.clipboard.writeText(url).then(() => {
+        setCopyFeedback(true);
+        setTimeout(() => setCopyFeedback(false), 2500);
+      });
+    }
+  }, [shareState]);
+
+  const handleReset = () => {
+    clearShareUrl();
+    setStep('form');
+    setParsedRoute(null);
+    setRouteData(null);
+    setShareState(null);
+    setError('');
+  };
 
   return (
     <div className="app">
@@ -136,11 +198,16 @@ export default function App() {
               <span className="logo-sub">Previsión espacio-temporal para motoristas</span>
             </div>
           </div>
-          {(step === 'result' || step === 'stops') && (
-            <button className="btn-reset" onClick={() => { setStep('form'); setParsedRoute(null); }}>
-              ← Nueva ruta
-            </button>
-          )}
+          <div className="header-actions">
+            {step === 'result' && shareState && (
+              <button className="btn-share" onClick={handleShare}>
+                {copyFeedback ? '✅ Copiado' : '🔗 Compartir'}
+              </button>
+            )}
+            {(step === 'result' || step === 'stops') && (
+              <button className="btn-reset" onClick={handleReset}>← Nueva ruta</button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -158,11 +225,7 @@ export default function App() {
         )}
 
         {step === 'stops' && parsedRoute && (
-          <StopsStep
-            route={parsedRoute}
-            onBack={() => setStep('form')}
-            onCalculate={handleCalculate}
-          />
+          <StopsStep route={parsedRoute} onBack={() => setStep('form')} onCalculate={handleCalculate} />
         )}
 
         {step === 'loading' && (
@@ -186,7 +249,7 @@ export default function App() {
               </div>
               <div className="summary-stat">
                 <span className="stat-val">~{routeData.effectiveAvgKmh} km/h</span>
-                <span className="stat-label">Velocidad media est.</span>
+                <span className="stat-label">Vel. media est.</span>
               </div>
               <div className="summary-stat">
                 <span className="stat-val">{formatTime(routeData.departureTime)}</span>
@@ -214,29 +277,18 @@ export default function App() {
   );
 }
 
-// Build cumulative OSRM travel time (seconds) for each geometry point
 function buildCumulativeTime(geometry, legDistances, legDurations) {
-  // Each leg covers legDistances[i] meters in legDurations[i] seconds
-  // We assign time proportionally within each leg's geometry segment
   const cumDist = buildCumulativeDist(geometry);
   const totalDist = cumDist[cumDist.length - 1];
-
-  // Build leg boundaries in cumulative distance
   let legCumDist = 0;
   const legBoundaries = [0];
-  legDistances.forEach(d => {
-    legCumDist += d;
-    legBoundaries.push(legCumDist);
-  });
+  legDistances.forEach(d => { legCumDist += d; legBoundaries.push(legCumDist); });
 
-  // For each geometry point, figure out which leg it's in and interpolate time
   const cumTime = [0];
   let legIdx = 0;
   let timeAtLegStart = 0;
-
   for (let i = 1; i < geometry.length; i++) {
     const d = cumDist[i];
-    // Advance leg if needed
     while (legIdx < legBoundaries.length - 2 && d > legBoundaries[legIdx + 1] + 0.1) {
       timeAtLegStart += legDurations[legIdx];
       legIdx++;
@@ -248,15 +300,12 @@ function buildCumulativeTime(geometry, legDistances, legDurations) {
     const fracInLeg = legLen > 0 ? Math.min(1, (d - legStart) / legLen) : 0;
     cumTime.push(timeAtLegStart + fracInLeg * legDur);
   }
-
   return cumTime;
 }
 
 function buildCumulativeDist(geometry) {
   const cum = [0];
-  for (let i = 1; i < geometry.length; i++) {
-    cum.push(cum[i - 1] + haversineM(geometry[i - 1], geometry[i]));
-  }
+  for (let i = 1; i < geometry.length; i++) cum.push(cum[i - 1] + haversineM(geometry[i - 1], geometry[i]));
   return cum;
 }
 
@@ -269,16 +318,11 @@ function haversineM(a, b) {
 }
 
 function interpolateTime(distM, cumDistM, cumTimeS) {
-  // Binary search for position
   let lo = 0, hi = cumDistM.length - 1;
-  while (lo < hi - 1) {
-    const mid = (lo + hi) >> 1;
-    if (cumDistM[mid] <= distM) lo = mid; else hi = mid;
-  }
+  while (lo < hi - 1) { const mid = (lo + hi) >> 1; if (cumDistM[mid] <= distM) lo = mid; else hi = mid; }
   const span = cumDistM[hi] - cumDistM[lo];
   if (span < 0.01) return cumTimeS[lo];
-  const frac = (distM - cumDistM[lo]) / span;
-  return cumTimeS[lo] + frac * (cumTimeS[hi] - cumTimeS[lo]);
+  return cumTimeS[lo] + ((distM - cumDistM[lo]) / span) * (cumTimeS[hi] - cumTimeS[lo]);
 }
 
 function buildStopsByDistance(waypoints, legDistances, stops) {
@@ -286,15 +330,9 @@ function buildStopsByDistance(waypoints, legDistances, stops) {
   let cumDist = 0;
   const waypointDists = [0];
   legDistances.forEach(d => { cumDist += d; waypointDists.push(cumDist); });
-
   return stops.map((stop, i) => {
     const wpIndex = Math.min(stop.waypointIndex, waypointDists.length - 1);
-    return {
-      label: waypoints[wpIndex]?.label || `Parada ${i + 1}`,
-      distFromStart: waypointDists[wpIndex] || 0,
-      durationMs: stop.durationMin * 60 * 1000,
-      counted: false,
-    };
+    return { label: waypoints[wpIndex]?.label || `Parada ${i + 1}`, distFromStart: waypointDists[wpIndex] || 0, durationMs: stop.durationMin * 60 * 1000, counted: false };
   });
 }
 
@@ -319,9 +357,5 @@ function formatTime(iso) {
 
 function AlertBadge({ samples }) {
   const max = Math.max(...samples.map(s => s.alertLevel));
-  return (
-    <span className="alert-badge" style={{ color: ALERT_COLORS[max], fontWeight: 700, fontSize: '1.1rem' }}>
-      {ALERT_LABELS[max]}
-    </span>
-  );
+  return <span className="alert-badge" style={{ color: ALERT_COLORS[max], fontWeight: 700, fontSize: '1.1rem' }}>{ALERT_LABELS[max]}</span>;
 }
