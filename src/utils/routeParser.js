@@ -95,13 +95,23 @@ export function parseGoogleMapsUrl(url) {
  * We scan for consecutive coord-like pairs.
  */
 function extractEmbeddedCoords(dataStr) {
-  // Match all !Nd<number> tokens — data= is embedded in the pathname for Google Maps URLs
+  // Google Maps uses different token formats depending on URL type:
+  //   !1d/!2d  — older format (dir with named waypoints, data= in pathname)
+  //   !3d/!4d  — newer format (!3d=lat, !4d=lng, explicit order)
+  // Try !3d/!4d first (explicit lat/lng), then fall back to !1d/!2d pairs
+
+  // Format A: !3d<lat>!4d<lng> — explicit, reliable
+  const explicit = [...dataStr.matchAll(/!3d(-?[\d.]+).*?!4d(-?[\d.]+)/g)].map(m => ({
+    lat: parseFloat(m[1]),
+    lng: parseFloat(m[2]),
+  }));
+  if (explicit.length) return explicit;
+
+  // Format B: !1d/!2d consecutive pairs
   const tokens = [...dataStr.matchAll(/![12]d(-?[\d.]+)/g)].map(m => parseFloat(m[1]));
   const pairs = [];
   for (let i = 0; i < tokens.length - 1; i += 2) {
     const a = tokens[i], b = tokens[i + 1];
-    // Determine which is lat and which is lng
-    // Lat: -90..90, Lng: -180..180; if both fit lat range, use order: first=lng, second=lat
     if (Math.abs(a) <= 180 && Math.abs(b) <= 90) {
       pairs.push({ lng: a, lat: b });
     } else if (Math.abs(a) <= 90 && Math.abs(b) <= 180) {
