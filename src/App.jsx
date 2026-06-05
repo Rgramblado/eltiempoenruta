@@ -260,12 +260,6 @@ export default function App() {
               </div>
             </div>
 
-            {shareState && (
-              <button className="btn-share-full" onClick={handleShare}>
-                {copyFeedback ? '✅ ¡Enlace copiado!' : '🔗 Compartir esta ruta'}
-              </button>
-            )}
-
             <div className="map-container">
               <RouteMap routeData={routeData} />
             </div>
@@ -274,6 +268,13 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {step === 'result' && shareState && (
+        <button className="btn-share-fab" onClick={handleShare}>
+          {copyFeedback ? '✅' : '🔗'}
+          <span>{copyFeedback ? 'Copiado' : 'Compartir'}</span>
+        </button>
+      )}
     </div>
   );
 }
