@@ -1,0 +1,27 @@
+name: Deploy API
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy API over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.CLOUDING_HOST }}
+          username: ${{ secrets.CLOUDING_USER }}
+          key: ${{ secrets.CLOUDING_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            cd "${{ secrets.CLOUDING_APP_DIR }}"
+            git fetch origin main
+            git reset --hard origin/main
+            npm ci
+            pm2 reload eltiempo-api --update-env || pm2 start server/src/index.js --name eltiempo-api
+            pm2 save

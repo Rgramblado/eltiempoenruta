@@ -1,21 +1,17 @@
 {
   "name": "eltiempoenruta",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
+  "workspaces": [
+    "front",
+    "server"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "leaflet": "^1.9.4",
-    "react-leaflet": "^4.2.1"
-  },
-  "devDependencies": {
-    "@vitejs/plugin-react": "^4.3.1",
-    "vite": "^5.4.2"
+    "dev:front": "npm run dev -w front",
+    "dev:server": "npm run dev -w server",
+    "build": "npm run build -w front",
+    "test": "node --test \"server/src/**/*.test.js\"",
+    "start": "npm run start -w server"
   }
 }

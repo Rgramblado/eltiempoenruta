@@ -3,3 +3,5 @@ dist
 .vercel
 *.local
 .env
+.playwright-mcp
+tiempo_en_ruta_codex_pack.zip

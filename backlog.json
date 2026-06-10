@@ -1,0 +1,55 @@
+{
+  "project": "El Tiempo en Ruta",
+  "generatedAt": "2026-06-09T15:15:31.096820Z",
+  "phases": [
+    {
+      "name": "Fase 1 - Base técnica",
+      "tasks": [
+        "Migrar geocoding principal a Google",
+        "Crear providers",
+        "Añadir cache service",
+        "Añadir rate limiting",
+        "Validar endpoints",
+        "Añadir observabilidad"
+      ]
+    },
+    {
+      "name": "Fase 2 - Motor de riesgo",
+      "tasks": [
+        "RideScore",
+        "Alertas por tramo",
+        "Viento lateral",
+        "Mejor hora de salida",
+        "Recomendador de equipación"
+      ]
+    },
+    {
+      "name": "Fase 3 - Persistencia y sharing",
+      "tasks": [
+        "Guardar rutas",
+        "Compartir rutas",
+        "Tarjetas compartibles",
+        "Export GPX"
+      ]
+    },
+    {
+      "name": "Fase 4 - Social",
+      "tasks": [
+        "Rutas públicas",
+        "Reportes por tramo",
+        "Grupos privados",
+        "Clubs moteros"
+      ]
+    },
+    {
+      "name": "Fase 5 - React Native",
+      "tasks": [
+        "Extraer dominio compartido",
+        "Estabilizar API",
+        "Auth",
+        "Modo ruta activa",
+        "Notificaciones"
+      ]
+    }
+  ]
+}
