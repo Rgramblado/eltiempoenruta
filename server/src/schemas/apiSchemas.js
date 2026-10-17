@@ -37,6 +37,14 @@ export const routeRequestSchema = z.object({
   computeAlternativeRoutes: z.boolean().optional(),
 });
 
+export const geocodeRequestSchema = z.object({
+  places: z.array(z.string().trim().min(1, 'El nombre del lugar no puede estar vacio.').max(300))
+    .min(1, 'Se necesita al menos un lugar.')
+    .max(27, 'Demasiados lugares para geocodificar en una sola peticion.'),
+  region: z.string().trim().length(2).optional(),
+  language: z.string().trim().min(2).max(8).optional(),
+});
+
 export const departureOptionsSchema = z.object({
   points: z.array(weatherPoint).min(2, 'Se necesitan al menos dos puntos muestreados.').max(120, 'Demasiados puntos: reduce el muestreo.'),
   offsetsMinutes: z.array(z.coerce.number()).max(16).optional(),

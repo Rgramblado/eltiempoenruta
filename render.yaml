@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: eltiempoenruta-api
+    runtime: node
+    plan: free
+    buildCommand: npm ci --omit=dev
+    startCommand: node server/src/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: GOOGLE_KEY
+        sync: false
